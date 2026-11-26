@@ -26,7 +26,7 @@ ResourceLoop AI supports architects, structural engineers, renovation project ma
 4. **Product Twin / Resource DNA**: Component hierarchy, multi-layer materials, and live deterministic Quantity Engine (`12 m² − 2 m² = 10 m²` reference case).
 5. **Material Intelligence**: 12-category material library and Material Flow visualization (documented stock vs. scenario forecast).
 6. **Circular Decision Compass & Szenarienvergleich**: 5 R-strategies (`R1 KEEP`, `R2 REPAIR/REUSE`, `R3 REFURBISH`, `R4 REMANUFACTURE`, `R5 RECYCLE`) plus separated `Conventional Replacement` benchmark, editable cost positions, sensitivity ranges, non-compensatory technical gates, and MCDA ranking lock when critical criteria are `UNKNOWN`.
-7. **Decision Memory & Data Trust Center**: Versioned immutable decision snapshots, expert approval workflow, Data Quality metrics, and Audit Trail.
+7. **Decision Memory & Data Trust Center**: Versioned demonstrator decision snapshots (not tamper-proof), expert approval workflow, Data Quality metrics, and Audit Trail.
 8. **Reports**: 18-section Renovation Decision Report with downloadable PDF and CSV exports.
 
 ## Setup & Local Development
@@ -45,3 +45,7 @@ npm run build    # Production Vite bundle
 - **Persistence**: Currently runs in local demonstrator mode (`./data/workspace.json` + `localStorage`). Cloud Firestore & Firebase Auth are prepared in the data model (`PLANNED`) and not falsely claimed as active.
 - **Blocked/Manual Geo Sources**: Municipal contaminated-site registers (*Altlastenkataster NRW*), *BKG Starkregen*, and *ELWAS Hochwasser* parcel-level JSON APIs require manual import or municipal access (`BLOCKED` / `MANUAL_IMPORT_REQUIRED`).
 - **Disclaimer**: Reports and AI briefings are decision-support artifacts and do not replace certified structural, fire-safety, or hazardous-material expert assessments.
+
+## V2.1 release candidate — not approved for production
+
+See [QUALITY_AUDIT_V2_1.md](QUALITY_AUDIT_V2_1.md). Local server binds to loopback by default. Network/production mode requires a strong RESEARCH_ACCESS_PASSWORD, HTTP Basic user `research`, and HTTPS termination. This is single-user access protection, NOT multi-user authentication or tenant separation. Do not expose confidential data or run parallel user sessions. Real expert approval is disabled pending verified roles. Health checks report configuration only. CI and E2E results are pending.

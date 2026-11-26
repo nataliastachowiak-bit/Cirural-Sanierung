@@ -424,22 +424,26 @@ export function evaluateMcdaScenarios(
   rows: McdaEvaluationRow[];
 } {
   const circularOrBench = scenarios;
+  const isExcluded = (s: Scenario) => s.overallTechnicalStatus === 'EXCLUDED' || s.technicalConstraints.some(c => c.status === 'EXCLUDED');
+  const needsReview = (s: Scenario) => s.overallTechnicalStatus !== 'PASSED' || s.technicalConstraints.length === 0 || s.technicalConstraints.some(c => c.status !== 'PASSED');
+  const eligible = scenarios.filter(s => !isExcluded(s) && !needsReview(s));
+  const validWeights = Object.values(weights).every(w => Number.isFinite(w) && w >= 0);
   const costSummaries = new Map(circularOrBench.map((s) => [s.id, calculateScenarioCosts(s)]));
 
-  const validNetCosts = circularOrBench
+  const validNetCosts = eligible
     .map((s) => costSummaries.get(s.id)?.totalNetEur)
-    .filter((v): v is number => v !== null && v !== undefined && v > 0);
+    .filter((v): v is number => v !== null && v !== undefined && Number.isFinite(v) && v >= 0);
   const minCost = validNetCosts.length ? Math.min(...validNetCosts) : null;
   const maxCost = validNetCosts.length ? Math.max(...validNetCosts) : null;
 
-  const validPreserved = circularOrBench
+  const validPreserved = eligible
     .map((s) => s.environmentalImpact.preservedMaterialKg)
-    .filter((v): v is number => v !== null && v >= 0);
+    .filter((v): v is number => v !== null && Number.isFinite(v) && v >= 0);
   const maxPreserved = validPreserved.length ? Math.max(...validPreserved) : null;
 
-  const validGhg = circularOrBench
+  const validGhg = eligible
     .map((s) => s.environmentalImpact.ghgEmissionsKgCo2e)
-    .filter((v): v is number => v !== null);
+    .filter((v): v is number => v !== null && Number.isFinite(v));
   const minGhg = validGhg.length ? Math.min(...validGhg) : null;
   const maxGhg = validGhg.length ? Math.max(...validGhg) : null;
 
@@ -457,13 +461,16 @@ export function evaluateMcdaScenarios(
     const cost = costSummaries.get(s.id)!;
     const missingCritical: string[] = [];
 
-    if (s.overallTechnicalStatus === 'UNKNOWN') {
-      missingCritical.push('Technischer Status unbekannt');
+    if (!isExcluded(s) && needsReview(s)) {
+      missingCritical.push('Technische Fachprüfung oder Einzelkriterien offen');
+    }
+    if (s.environmentalImpact.preservedMaterialKg === null || !Number.isFinite(s.environmentalImpact.preservedMaterialKg) || s.environmentalImpact.preservedMaterialKg < 0) {
+      missingCritical.push('Ressourcenerhalt unbekannt oder ungültig');
     }
     if (!cost.isComplete) {
       missingCritical.push(`Fehlende Kostenpositionen (${cost.missingPositionsCount})`);
     }
-    if (s.environmentalImpact.status === 'UNKNOWN' || s.environmentalImpact.ghgEmissionsKgCo2e === null) {
+    if (s.environmentalImpact.status === 'UNKNOWN' || s.environmentalImpact.ghgEmissionsKgCo2e === null || !Number.isFinite(s.environmentalImpact.ghgEmissionsKgCo2e)) {
       missingCritical.push('Fehlende Umwelt-/CO₂e-Daten');
     }
 
@@ -475,7 +482,7 @@ export function evaluateMcdaScenarios(
       UNKNOWN: null,
     };
 
-    const techScore = techScoreMap[s.overallTechnicalStatus];
+    const techScore = isExcluded(s) ? 0 : needsReview(s) ? null : techScoreMap[s.overallTechnicalStatus];
 
     let econScore: number | null = null;
     if (cost.totalNetEur !== null && minCost !== null && maxCost !== null) {
@@ -512,11 +519,11 @@ export function evaluateMcdaScenarios(
       1
     );
 
-    const isExcluded = s.overallTechnicalStatus === 'EXCLUDED';
+    const excluded = isExcluded(s);
     const hasMissing = missingCritical.length > 0;
 
     let normalizedScore: number | null = null;
-    if (!isExcluded && !hasMissing && weightSum > 0 && techScore !== null && econScore !== null && envScore !== null && resScore !== null) {
+    if (!excluded && !hasMissing && validWeights && weightSum > 0 && techScore !== null && econScore !== null && envScore !== null && resScore !== null) {
       normalizedScore = roundTo(
         (techScore * weights.technicalSuitability +
           econScore * weights.economicViability +
@@ -535,7 +542,7 @@ export function evaluateMcdaScenarios(
       name: s.name,
       isCircular: s.isCircular,
       technicalStatus: s.overallTechnicalStatus,
-      excludedOrBlocked: isExcluded,
+      excludedOrBlocked: excluded,
       missingCriticalCriteria: missingCritical,
       normalizedScore,
       rank: null,
@@ -557,11 +564,12 @@ export function evaluateMcdaScenarios(
     );
   }
 
-  const canProduceFinalRanking = circularIncomplete.length === 0 && rows.some((r) => r.normalizedScore !== null);
+  if (!validWeights || weightSum <= 0) blockingReasons.push('MCDA-Gewichte ungültig');
+  const canProduceFinalRanking = validWeights && weightSum > 0 && circularIncomplete.length === 0 && rows.some((r) => r.isCircular && r.normalizedScore !== null);
 
   if (canProduceFinalRanking) {
     const rankable = rows
-      .filter((r) => r.normalizedScore !== null)
+      .filter((r) => r.isCircular && r.normalizedScore !== null)
       .sort((a, b) => (b.normalizedScore ?? 0) - (a.normalizedScore ?? 0));
     rankable.forEach((r, idx) => {
       r.rank = idx + 1;

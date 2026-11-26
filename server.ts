@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import fs from 'fs';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
@@ -9,7 +10,12 @@ import { z } from 'zod';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || '127.0.0.1';
+const researchPassword = process.env.RESEARCH_ACCESS_PASSWORD || '';
+const protectedMode = process.env.NODE_ENV === 'production' || !['127.0.0.1', '::1', 'localhost'].includes(HOST);
+if (protectedMode && researchPassword.length < 16) throw new Error('Set RESEARCH_ACCESS_PASSWORD (minimum 16 characters) before network deployment.');
+const digest = (value: string) => createHash('sha256').update(value).digest();
 const DATA_DIR = path.resolve(__dirname, 'data');
 const WORKSPACE_FILE = path.resolve(DATA_DIR, 'workspace.json');
 
@@ -100,6 +106,27 @@ const CopilotSchema = z.object({
 
 async function startServer() {
   const app = express();
+  app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (protectedMode || researchPassword) {
+      const expected = 'Basic ' + Buffer.from('research:' + researchPassword).toString('base64');
+      if (!timingSafeEqual(digest(req.get('authorization') || ''), digest(expected))) {
+        res.setHeader('WWW-Authenticate', 'Basic realm="ResourceLoop Research"');
+        return res.status(401).send('Authentication required');
+      }
+    }
+    next();
+  });
+  // Single-instance demonstrator budget; not a distributed abuse prevention system.
+  let windowStart = Date.now();
+  let requests = 0;
+  app.use('/api/ai', (_req, res, next) => {
+    if (Date.now() - windowStart >= 60_000) { windowStart = Date.now(); requests = 0; }
+    if (++requests > 12) { res.setHeader('Retry-After', '60'); return res.status(429).json({ error: 'AI request limit reached' }); }
+    next();
+  });
   app.use(express.json({ limit: '16mb' }));
 
   app.get('/api/health', (_req: Request, res: Response) => {
@@ -107,6 +134,7 @@ async function startServer() {
     res.json({
       ok: true,
       geminiConfigured: hasGemini,
+      geminiConnectivity: 'NOT_TESTED',
       persistenceMode: 'LOCAL_SERVER_AND_BROWSER',
       timestamp: new Date().toISOString(),
     });
@@ -130,12 +158,13 @@ async function startServer() {
   app.put('/api/workspace', (req: Request, res: Response) => {
     try {
       const body = req.body;
-      if (!body || !Array.isArray(body.projects)) {
+      if (!body || !['projects', 'materials', 'dataSources', 'auditEvents', 'reports'].every(key => Array.isArray(body[key])) || !body.currentUser || typeof body.currentUser !== 'object') {
         res.status(400).json({ error: 'Invalid workspace payload' });
         return;
       }
       ensureWorkspaceDir();
-      fs.writeFileSync(WORKSPACE_FILE, JSON.stringify(body, null, 2), 'utf-8');
+      fs.writeFileSync(WORKSPACE_FILE + '.tmp', JSON.stringify(body, null, 2), { encoding: 'utf-8', mode: 0o600 });
+      fs.renameSync(WORKSPACE_FILE + '.tmp', WORKSPACE_FILE);
       res.json({ ok: true, savedAt: new Date().toISOString() });
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : 'Workspace save failed' });
@@ -627,7 +656,7 @@ VERBINDLICHE REGELN:
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, HOST, () => {
     console.log(`ResourceLoop AI Server listening on http://localhost:${PORT}`);
   });
 }
