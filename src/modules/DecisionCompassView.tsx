@@ -180,7 +180,7 @@ export const DecisionCompassView: React.FC = () => {
     const snap: DecisionSnapshot = {
       id: `dec-${Date.now()}`,
       version: nextVersion,
-      parentSnapshotId: activeProject.decisions[0]?.id,
+      parentSnapshotId: activeProject.decisions.find(d => d.componentId === activeComponent.id)?.id,
       projectId: activeProject.id,
       componentId: activeComponent.id,
       decisionDate: new Date().toISOString(),
@@ -226,7 +226,7 @@ export const DecisionCompassView: React.FC = () => {
     };
     addDecisionSnapshot(activeProject.id, snap);
     setHumanRationale('');
-    setSnapshotSavedMsg(`Entscheidungs-Snapshot v${nextVersion} unveränderbar im Decision Memory gespeichert.`);
+    setSnapshotSavedMsg(`Entscheidungs-Snapshot v${nextVersion} im Decision Memory gespeichert (Demonstrator).`);
   };
 
   return (

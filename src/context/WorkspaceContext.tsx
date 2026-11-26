@@ -591,6 +591,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       status: DecisionSnapshot['approval']['decisionStatus'],
       comment: string
     ) => {
+      // Real expert approvals require a server-verified identity, not a selectable demo role.
+      if (status === 'APPROVED') return;
       const now = new Date().toISOString();
       setState((prev) => ({
         ...prev,
@@ -598,7 +600,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           p.id === projectId
             ? {
                 ...p,
-                status: status === 'APPROVED' ? 'DECIDED' : p.status,
+                status: p.status,
                 decisions: p.decisions.map((d) =>
                   d.id === snapshotId
                     ? {

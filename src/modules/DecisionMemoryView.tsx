@@ -37,7 +37,7 @@ export const DecisionMemoryView: React.FC = () => {
         <div>
           <h1 className="text-2xl font-semibold text-[#101714]">07 · Decision Memory</h1>
           <p className="text-sm text-[#6E8276] mt-1">
-            Unveränderbares, versioniertes Entscheidungsjournal. Ähnliche Referenzfälle dienen nur als Orientierung und ersetzen keine objektbezogene Prüfung.
+            Versioniertes Entscheidungsjournal (Demonstrator; nicht revisionssicher). Ähnliche Referenzfälle dienen nur als Orientierung und ersetzen keine objektbezogene Prüfung.
           </p>
         </div>
 
@@ -188,18 +188,12 @@ export const DecisionMemoryView: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() =>
-                        updateDecisionApproval(
-                          project.id,
-                          decision.id,
-                          'APPROVED',
-                          approvalComment || 'Fachlich geprüft und freigegeben.'
-                        )
-                      }
+                      disabled
+                      title="Echte Freigabe erst mit serverseitig geprüfter Fachidentität"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#063D2F] text-white font-medium hover:bg-[#101714]"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Freigeben</span>
+                      <span>Fachfreigabe gesperrt</span>
                     </button>
                     <button
                       type="button"

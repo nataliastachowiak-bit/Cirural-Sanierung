@@ -80,6 +80,29 @@ describe('ResourceLoop AI Deterministic Calculation Engine', () => {
     expect(mcdaExcl.rows[0].normalizedScore).toBeNull();
   });
 
+  it('blocks unresolved expert review even when the overall status is passed', () => {
+    const base = demoProject.scenarios[0];
+    const pending: Scenario = { ...base, overallTechnicalStatus: 'PASSED', technicalConstraints: [{ ...base.technicalConstraints[0], id: 'review', domain: 'STRUCTURAL', title: 'Review', rationale: 'Open', status: 'EXPERT_REVIEW_REQUIRED' }] };
+    const result = evaluateMcdaScenarios([pending], demoProject.mcdaWeights);
+    expect(result.canProduceFinalRanking).toBe(false);
+    expect(result.rows[0].normalizedScore).toBeNull();
+    expect(result.rows[0].missingCriticalCriteria).toContain('Technische Fachprüfung oder Einzelkriterien offen');
+  });
+
+  it('excludes a scenario when any technical constraint excludes it', () => {
+    const base = demoProject.scenarios[0];
+    const excluded: Scenario = { ...base, overallTechnicalStatus: 'PASSED', technicalConstraints: [{ ...base.technicalConstraints[0], id: 'excluded', domain: 'FIRE_PROTECTION', title: 'Exclusion', rationale: 'Failed', status: 'EXCLUDED' }] };
+    const result = evaluateMcdaScenarios([excluded], demoProject.mcdaWeights);
+    expect(result.rows[0].excludedOrBlocked).toBe(true);
+    expect(result.rows[0].normalizedScore).toBeNull();
+    expect(result.canProduceFinalRanking).toBe(false);
+  });
+
+  it('blocks a scenario with an empty technical checklist', () => {
+    const result = evaluateMcdaScenarios([{ ...demoProject.scenarios[0], overallTechnicalStatus: 'PASSED', technicalConstraints: [] }], demoProject.mcdaWeights);
+    expect(result.rows[0].missingCriticalCriteria).toContain('Technische Fachprüfung oder Einzelkriterien offen');
+  });
+
   it('computes transparent Data Quality metrics for demo project', () => {
     const dq = evaluateProjectDataQuality(demoProject);
     expect(dq.completenessPct).toBeGreaterThan(0);
